@@ -1,0 +1,9 @@
+{
+  "name": "gateway",
+  "version": "1.0.0",
+  "description": "StayMarta API Gateway Service",
+  "main": "index.js",
+  "repository": "http://github.com/staymarta/gateway",
+  "author": "Jared Allard <jaredallard@outlook.com>",
+  "license": "MIT"
+}
