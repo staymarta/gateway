@@ -43,4 +43,4 @@ ADD ./package.json /gateway
 RUN yarn
 
 # Copy files
-ADD ./src /gateway
+ADD ./ /gateway

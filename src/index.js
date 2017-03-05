@@ -7,19 +7,74 @@
 
 'use strict';
 
-//const express = require('express');
-//const amqp    = require('amqp');
-const debug   = require('debug')('staymarta:main');
+console.log('STAYMARTA API GATEWAY INITIALIZING')
 
-const VAULT_TOKEN = process.env.VAULT_TOKEN;
+const express = require('express');
+const bodyp   = require('body-parser');
+const async   = require('async');
+const path    = require('path');
+const fs      = require('fs');
+const debug   = require('./lib/logger.js')('staymarta:bootstrap')
+const router  = require('./lib/router.js');
 
-// Secret management
-const Secrets = require('./lib/secrets.js')
-let secrets = new Secrets();
+let app = express();
 
-debug('vault', `connect with ${VAULT_TOKEN}`)
-secrets.connect(VAULT_TOKEN)
-secrets.get('invaild', 'hello')
-  .done(data => {
-    console.log('got', data);
-  })
+/**
+ * Built In API helpers.
+ **/
+app.use((req, res, next) => {
+
+  /**
+   * Return a standard error.
+   *
+   * @param {String} desc - description of the error.
+   * @param {Number} code - error code
+   **/
+  res.error = (desc, code) => {
+    return res.send({
+      error: {
+        message: desc,
+        code: code
+      }
+    })
+  };
+
+  /**
+   * Return a standard success response
+   *
+   * @param {*} data - data to send.
+   **/
+  res.success = data => {
+    return res.send({
+      metadata: {
+        server_time: Date.now()
+      },
+      data: data
+    })
+  }
+
+  /**
+   * Paginate data.
+   *
+   * @param {*} data - data to paginate / send.
+   **/
+  res.paginate = data => {
+    return res.send({
+      metadata: {
+        pages: data.length,
+        per_page: 1,
+        length: data.length
+      },
+      data: data
+    })
+  };
+
+  return next();
+})
+
+app.use(bodyp.json())
+app.use(router)
+
+app.listen(80, () => {
+  debug('running on port 80')
+});
