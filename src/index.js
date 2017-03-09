@@ -48,11 +48,12 @@ app.use((req, res, next) => {
    *
    * @param {String} desc - description of the error.
    * @param {Number} code - error code
+   * @param {Number} status - HTTP Status Code.
    * @returns {Null} null
    **/
-  res.error = (desc, code) => {
+  res.error = (desc, code, status = 501) => {
     revokeRequestId(id)
-    return res.send({
+    return res.status(status).send({
       error: {
         message: desc,
         code: code

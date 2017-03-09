@@ -7,83 +7,83 @@
  **/
 
 const debug  = require('./logger.js')('staymarta:communication')
+const uuid   = require('uuid');
 
 /**
  * @class
  **/
 class ServiceCommunication {
   constructor(rabbitmq = 'rabbitmq') {
-    let rabbot = require('rabbot')
+    this.rabbot = require('rabbot')
+    this.rabbitmq = rabbitmq
+  }
 
-    // HACK: To maybe be async?
-    const init = async () => {
-      this.exchange = 'v1.staymarta';
-      this.timeout  = 5000;
+  async connect() {
+    this.exchange = 'v1.staymarta';
+    this.timeout  = 5000;
+    this.service_id = uuid.v4() // HACK: Think about using container ID?
 
-      let unique_queue = `${this.exchange}.api`
-      this.unique_queue = unique_queue;
+    let unique_queue = `${this.exchange}.api--${this.service_id}`
+    this.unique_queue = unique_queue;
 
-      await rabbot.configure({
-        connection: {
-          host: rabbitmq,
-          port: 5672,
-          timeout: 2000,
-          heatbeat: 10,
-          vhost: '%2f',
-          publishTimeout: 2000
+    await this.rabbot.configure({
+      connection: {
+        host: this.rabbitmq,
+        port: 5672,
+        timeout: 2000,
+        heatbeat: 10,
+        vhost: '%2f',
+        publishTimeout: 2000
+      },
+
+      exchanges: [
+        {
+          name: this.exchange,
+          type: 'fanout',
+          autoDelete: true
+        },
+        {
+          name: `${this.exchange}.api`,
+          type: 'direct',
+          autoDelete: true
+        }
+      ],
+
+      queues: [
+        {
+          name: this.exchange,
+          autoDelete: true,
+          subscribe: true,
+          limit: 20
         },
 
-        exchanges: [
-          {
-            name: this.exchange,
-            type: 'fanout',
-            autoDelete: true
-          },
-          {
-            name: unique_queue,
-            type: 'direct',
-            autoDelete: true
-          }
-        ],
+        {
+          name: unique_queue,
+          autoDelete: true,
+          subscribe: true
+        }
+      ],
 
-        queues: [
-          {
-            name: this.exchange,
-            autoDelete: true,
-            subscribe: true,
-            limit: 20
-          },
+      // binds exchanges and queues to one another
+      bindings: [
+        {
+          exchange: 'v1.staymarta',
+          target: 'v1.staymarta',
+          keys: ''
+        },
+        {
+          exchange: `${this.exchange}.api`,
+          target: unique_queue,
+          keys: this.service_id
+        }
+      ]
+    })
 
-          {
-            name: unique_queue,
-            autoDelete: true,
-            subscribe: true
-          }
-        ],
+    this.rabbot.on('unreachable', () => {
+      debug('rabbit', 'unreacheable.')
+    })
 
-        // binds exchanges and queues to one another
-        bindings: [
-          {
-            exchange: 'v1.staymarta',
-            target: 'v1.staymarta',
-            keys: ''
-          },
-          {
-            exchange: unique_queue,
-            target: unique_queue,
-            keys: process.env.HOST
-          }
-        ]
-      })
-
-      rabbot.on('unreachable', () => {
-        debug('rabbit', 'unreacheable.')
-      })
-
-      this.rabbit = rabbot;
-    };
-
-    init()
+    this.rabbit = this.rabbot;
   }
 
   /**
@@ -99,7 +99,7 @@ class ServiceCommunication {
 
     // send reply
     debug(`waiting for message type: ${type}`)
-    const handler = this.rabbit.handle({
+    this.rabbit.handle({
       queue: exchange,
       type: type,
       context: { // isolate the context
@@ -107,7 +107,7 @@ class ServiceCommunication {
       }
     }, msg => {
       let request = msg.body.request;
-      if(!request) return debug('notice', 'failed to access the request object.')
+      if(!request) return debug('notice', 'failed to access the request object. Is this a response?')
 
 
       /**
@@ -125,14 +125,14 @@ class ServiceCommunication {
           data.request = request;
 
           // Add custom routing if present in the message.
-          exchange = data.request.reply || exchange;
-          routingKey = data.request.key || null;
+          exchange    = data.request.reply || exchange;
+          routingKey  = data.request.key || '';
         }
         data.data = sendData;
 
-        handler.remove()
+        debug('reply', `on '${exchange}' with rk '${routingKey}', type '${type}.response'`)
         return this.rabbit.publish(exchange, {
-          routingKey: routingKey || '',
+          routingKey: routingKey,
           type: `${type}.response`,
           contentType: 'application/json',
           expiresAfter: timeout,
@@ -155,27 +155,39 @@ class ServiceCommunication {
    * @returns {Promise} .then/.progress, see rabbot.
    **/
   sendAndWait(type, data) {
-    let timeout = 10000;
+    let timeout = 5000;
     let exchange = this.exchange;
 
-    const replyPromise = new Promise(resolv => {
-      this.rabbit.handle({
+    const replyPromise = new Promise((resolv, reject) => {
+      // Responder
+      const handler = this.rabbit.handle({
         queue: this.unique_queue,
         type: `${type}.response`,
         context: {
           rabbit: this.rabbit
         }
       }, msg => {
+        // stop from timing out.
+        clearTimeout(requestTimeout);
         return resolv(msg)
       })
+
+      // Request Timeout watcher.
+      let requestTimeout = setTimeout(() => {
+        debug('timeout', 'triggered')
+        handler.remove();
+        return reject('timeout')
+      }, timeout)
     })
+
 
     // handle reply
     debug(`sending message '${type}' on '${exchange}', waiting on '${this.unique_queue}'`)
     if(!data.request) return debug('rejecting non-request object.')
-    data.request.reply = this.unique_queue;
-    data.request.key   = process.env.HOST
+    data.request.reply = `${this.exchange}.api` || null;
+    data.request.key   = this.service_id || null;
 
+    // Publish the message to the general exchange.
     this.rabbit.publish(exchange, {
       type: type,
       contentType: 'application/json',

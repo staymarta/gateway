@@ -9,7 +9,23 @@
 const debug          = require('./logger.js')('staymarta:router')
 const Communication  = require('./communication.js');
 
-const communication  = new Communication()
+const communication  = new Communication();
+
+(async () => {
+  await communication.connect();
+
+  // Always declared wait before sending.
+  // Example microservice.
+  debug('service', 'waiting for messages');
+  communication.wait('v1.message.get', async msg => {
+    debug('service', 'sending reply');
+
+    await msg.reply({
+      hello: 'world'
+    })
+    msg.ack();
+  });
+})()
 
 /**
  * Service Router.
@@ -35,27 +51,12 @@ let router = (req, res) => {
 
   debug('request', id)
 
-  // Always declared wait before sending.
-  // Example microservice.
-  communication.wait(rmqString, async msg => {
-    debug('service', 'sending reply');
-
-    await msg.reply({
-      hello: 'world'
-    })
-    msg.ack();
-  });
-
   // Send the message and await the response.
   communication.sendAndWait(rmqString, {
       request: {
         id: id,
         created: Date.now()
       }
-  })
-  .catch(() => {
-    debug('error', id, `couldn\'t reach '${service}' in time.`)
-    return res.error('Failed to retrieve response in allocated time.')
   })
   .then(data => {
     debug('message', data.body)
@@ -78,10 +79,18 @@ let router = (req, res) => {
         },
         rabbitmq: {
           type: rmqString
+        },
+        gateway: {
+          id: communication.service_id,
+          time: Date.now()
         }
       },
       [service]: data.body.data || null
     })
+  })
+  .catch(() => {
+    debug('error', id, `couldn\'t reach '${service}' in time.`)
+    return res.error('Failed to retrieve response in allocated time.', 200, 503)
   })
 }
 
