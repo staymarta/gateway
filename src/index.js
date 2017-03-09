@@ -7,30 +7,51 @@
 
 'use strict';
 
-console.log('STAYMARTA API GATEWAY INITIALIZING')
-
 const express = require('express');
 const bodyp   = require('body-parser');
-const async   = require('async');
-const path    = require('path');
-const fs      = require('fs');
+const uuid    = require('uuid');
 const debug   = require('./lib/logger.js')('staymarta:bootstrap')
 const router  = require('./lib/router.js');
+
+debug('init', 'modules loaded')
 
 let app = express();
 
 /**
  * Built In API helpers.
  **/
+
+// Future update security.
+if(app.requests) throw 'app.requests isn\'t empty'
+app.requests = {};
+
 app.use((req, res, next) => {
+
+  /**
+   * Remove a request.
+   *
+   * @param {String} id - id to invalidate.
+   * @returns {undefined} nothing.
+   **/
+  const revokeRequestId = id => {
+    debug('revokeRequestId', id);
+    req.app.requests[id] = null;
+  }
+
+  // Generate Request ID.
+  const id = uuid.v4()+':'+uuid.v4();
+  req.id = id;
+  req.app.requests[id] = res;
 
   /**
    * Return a standard error.
    *
    * @param {String} desc - description of the error.
    * @param {Number} code - error code
+   * @returns {Null} null
    **/
   res.error = (desc, code) => {
+    revokeRequestId(id)
     return res.send({
       error: {
         message: desc,
@@ -43,8 +64,10 @@ app.use((req, res, next) => {
    * Return a standard success response
    *
    * @param {*} data - data to send.
+   * @returns {Null} null
    **/
   res.success = data => {
+    revokeRequestId(id)
     return res.send({
       metadata: {
         server_time: Date.now()
@@ -57,8 +80,10 @@ app.use((req, res, next) => {
    * Paginate data.
    *
    * @param {*} data - data to paginate / send.
+   * @returns {null} null
    **/
   res.paginate = data => {
+    revokeRequestId(id)
     return res.send({
       metadata: {
         pages: data.length,

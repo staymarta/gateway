@@ -15,111 +15,178 @@ class ServiceCommunication {
   constructor(rabbitmq = 'rabbitmq') {
     let rabbot = require('rabbot')
 
-    // TODO: .configure method
-    rabbot.configure({
-      connection: {
-        host: rabbitmq,
-        port: 5672,
-        timeout: 2000,
-        heatbeat: 10,
-        vhost: "%2f",
-        publishTimeout: 2000
-      },
+    // HACK: To maybe be async?
+    const init = async () => {
+      this.exchange = 'v1.staymarta';
+      this.timeout  = 5000;
 
-      exchanges: [
-        {
-          name: "staymarta-v1",
-          type: "fanout",
-          autoDelete: false
-        }
-      ],
+      let unique_queue = `${this.exchange}.api`
+      this.unique_queue = unique_queue;
 
-      // setup the queues, only subscribing to the one this service
-      // will consume messages from
-      queues: [
-        {
-          name: "staymarta-v1",
-          autoDelete: true,
-          durable: true,
-          subscribe: "requests",
-          limit: 20
-        }
-      ],
-
-      // binds exchanges and queues to one another
-      bindings: [
-        {
-          exchange: "staymarta-v1",
-          target: "staymarta-v1",
-          keys: []
+      await rabbot.configure({
+        connection: {
+          host: rabbitmq,
+          port: 5672,
+          timeout: 2000,
+          heatbeat: 10,
+          vhost: '%2f',
+          publishTimeout: 2000
         },
-      ]
-    }).then(null, err => {
-      if(!err) return;
 
-      debug('rabbot:configure', 'failed to configure with', err);
-    })
+        exchanges: [
+          {
+            name: this.exchange,
+            type: 'fanout',
+            autoDelete: true
+          },
+          {
+            name: unique_queue,
+            type: 'direct',
+            autoDelete: true
+          }
+        ],
 
-    rabbot.on('unreachable', () => {
-      debug('rabbit', 'unreacheable.')
-    })
+        queues: [
+          {
+            name: this.exchange,
+            autoDelete: true,
+            subscribe: true,
+            limit: 20
+          },
 
-    this.rabbit = rabbot;
+          {
+            name: unique_queue,
+            autoDelete: true,
+            subscribe: true
+          }
+        ],
+
+        // binds exchanges and queues to one another
+        bindings: [
+          {
+            exchange: 'v1.staymarta',
+            target: 'v1.staymarta',
+            keys: ''
+          },
+          {
+            exchange: unique_queue,
+            target: unique_queue,
+            keys: process.env.HOST
+          }
+        ]
+      })
+
+      rabbot.on('unreachable', () => {
+        debug('rabbit', 'unreacheable.')
+      })
+
+      this.rabbit = rabbot;
+    };
+
+    init()
   }
 
-  test(string) {
-    let timeout = 10000;
-    let exchange = 'staymarta-v1';
+  /**
+   * Wait for message type {type}
+   *
+   * @param {String} type - type of message to handle.
+   * @param {Function} cb - callback to handle message.
+   * @returns {Promise} handle promise
+   **/
+  wait(type, cb) {
+    let timeout =  this.timeout;
+    let exchange = this.exchange
 
     // send reply
-    this.rabbit.handle({
+    debug(`waiting for message type: ${type}`)
+    const handler = this.rabbit.handle({
       queue: exchange,
-      type: string,
+      type: type,
       context: { // isolate the context
         rabbit: this.rabbit
       }
     }, msg => {
+      let request = msg.body.request;
+      if(!request) return debug('notice', 'failed to access the request object.')
 
-      debug('reply:service', 'send reply')
-    	this.rabbit.publish(exchange, {
-        type: `${string}.response`,
-        contentType: "application/json",
-        body: { text: "done" },
-        expiresAfter: timeout,
-        timeout: timeout,
-        timestamp: Date.now(), // posix timestamp (long)
-        mandatory: true //Must be set to true for onReturned to receive unqueued message
-      })
 
-    	msg.ack();
+      /**
+       * Message reply override to include custom type and autorequest insertion
+       *
+       * @param {Object} sendData - data to send.
+       * @returns {Promise} rabbot#publish
+       **/
+      msg.reply = sendData => {
+        const data = {};
+        let routingKey = null;
+
+        // Copy over request setup / reply queue.
+        if(request) {
+          data.request = request;
+
+          // Add custom routing if present in the message.
+          exchange = data.request.reply || exchange;
+          routingKey = data.request.key || null;
+        }
+        data.data = sendData;
+
+        handler.remove()
+        return this.rabbit.publish(exchange, {
+          routingKey: routingKey || '',
+          type: `${type}.response`,
+          contentType: 'application/json',
+          expiresAfter: timeout,
+          body: data,
+          timeout: timeout,
+          timestamp: Date.now(),
+          mandatory: true
+        })
+      }
+
+      return cb(msg)
     });
+  }
+
+  /**
+   * Send a message with $type and wait for a reply
+   *
+   * @param {String} type - message type.
+   * @param {*} data - data to send
+   * @returns {Promise} .then/.progress, see rabbot.
+   **/
+  sendAndWait(type, data) {
+    let timeout = 10000;
+    let exchange = this.exchange;
+
+    const replyPromise = new Promise(resolv => {
+      this.rabbit.handle({
+        queue: this.unique_queue,
+        type: `${type}.response`,
+        context: {
+          rabbit: this.rabbit
+        }
+      }, msg => {
+        return resolv(msg)
+      })
+    })
 
     // handle reply
-    debug(`sending message '${string}' on '${exchange}'`)
-    this.rabbit.handle({
-      queue: exchange,
-      type: `${string}.response`
-    }, msg => {
-      debug('reply', 'response', JSON.stringify(msg.body))
+    debug(`sending message '${type}' on '${exchange}', waiting on '${this.unique_queue}'`)
+    if(!data.request) return debug('rejecting non-request object.')
+    data.request.reply = this.unique_queue;
+    data.request.key   = process.env.HOST
 
-      let recieved = Date.now();
-      let diff = recieved - sent;
-      debug('reply', `roundtrip was ${diff}ms`)
-      msg.ack();
-    });
-
-    let sent = Date.now()
     this.rabbit.publish(exchange, {
-      type: string,
-      contentType: "application/json",
-      body: { text: "hello!" },
+      type: type,
+      contentType: 'application/json',
+      body: data,
       expiresAfter: timeout,
       timeout: timeout,
       timestamp: Date.now(), // posix timestamp (long)
       mandatory: true //Must be set to true for onReturned to receive unqueued message
-    }).then(() => {
-      debug('publish', 'event sent')
     })
+
+    return replyPromise;
   }
 }
 

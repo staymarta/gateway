@@ -10,6 +10,9 @@ const debug = require('debug');
 
 /**
  * Standard Console output w/ timestamps.
+ *
+ * @param {String} Module - name to classify this debug output under.
+ * @returns {Function} debug function.
  **/
 let CONSOLE = Module => {
   return (...args) => {
@@ -22,6 +25,9 @@ let CONSOLE = Module => {
 
 /**
  * JSON adapter with module, out, properties.
+ *
+ * @param {String} Module - name to classify this debug output under.
+ * @returns {Function} debug function.
  **/
 let jsonAdapter = Module => {
   return (...args) => {
@@ -52,7 +58,7 @@ module.exports = Module => {
 
   // wrapper around debug so we can intercept the args.
   let func = (...args) => {
-    return debugInstance.apply(debugInstance, args);
+    // return debugInstance.apply(debugInstance, args);
   }
 
   return func
