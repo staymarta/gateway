@@ -8,6 +8,7 @@
 
 const debug  = require('./logger.js')('staymarta:communication')
 const uuid   = require('uuid');
+const os     = require('os');
 
 /**
  * @class
@@ -19,12 +20,13 @@ class ServiceCommunication {
   }
 
   async connect() {
-    this.exchange = 'v1.staymarta';
+    this.exchange = 'v1';
     this.timeout  = 5000;
-    this.service_id = uuid.v4() // HACK: Think about using container ID?
+    this.service_id = os.hostname() // HACK: Think about using container ID?
 
     let unique_queue = `${this.exchange}.api--${this.service_id}`
     this.unique_queue = unique_queue;
+    this.service_queue = 'v1.message';
 
     await this.rabbot.configure({
       connection: {
@@ -39,7 +41,7 @@ class ServiceCommunication {
       exchanges: [
         {
           name: this.exchange,
-          type: 'fanout',
+          type: 'direct',
           autoDelete: true
         },
         {
@@ -51,7 +53,7 @@ class ServiceCommunication {
 
       queues: [
         {
-          name: this.exchange,
+          name: this.service_queue,
           autoDelete: true,
           subscribe: true,
           limit: 20
@@ -67,9 +69,9 @@ class ServiceCommunication {
       // binds exchanges and queues to one another
       bindings: [
         {
-          exchange: 'v1.staymarta',
-          target: 'v1.staymarta',
-          keys: ''
+          exchange: this.exchange,
+          target: this.service_queue,
+          keys: 'v1.message'
         },
         {
           exchange: `${this.exchange}.api`,
@@ -80,6 +82,7 @@ class ServiceCommunication {
     })
 
     this.rabbot.on('unreachable', () => {
+      this.rabbot.retry()
       debug('rabbit', 'unreacheable.')
     })
 
@@ -98,9 +101,9 @@ class ServiceCommunication {
     let exchange = this.exchange
 
     // send reply
-    debug(`waiting for message type: ${type}`)
+    debug(`waiting for message type: '${type}' on '${this.service_queue}'`)
     this.rabbit.handle({
-      queue: exchange,
+      queue: this.service_queue,
       type: type,
       context: { // isolate the context
         rabbit: this.rabbit
@@ -143,6 +146,9 @@ class ServiceCommunication {
         })
       }
 
+      // acknowledge the request.
+      msg.ack();
+
       return cb(msg)
     });
   }
@@ -167,7 +173,9 @@ class ServiceCommunication {
           rabbit: this.rabbit
         }
       }, msg => {
-        // stop from timing out.
+        // ack the msg, remove the handler, stop timeout.
+        msg.ack();
+        handler.remove()
         clearTimeout(requestTimeout);
         return resolv(msg)
       })
@@ -180,15 +188,18 @@ class ServiceCommunication {
       }, timeout)
     })
 
-
     // handle reply
-    debug(`sending message '${type}' on '${exchange}', waiting on '${this.unique_queue}'`)
     if(!data.request) return debug('rejecting non-request object.')
     data.request.reply = `${this.exchange}.api` || null;
     data.request.key   = this.service_id || null;
 
     // Publish the message to the general exchange.
+    let topicFormat = type.split('.');
+    let topic = `${topicFormat[0]}.${topicFormat[1]}`
+
+    debug(`sending message '${type}' on '${exchange}', waiting on '${this.unique_queue}', topic is '${topic}'`)
     this.rabbit.publish(exchange, {
+      routingKey: topic,
       type: type,
       contentType: 'application/json',
       body: data,

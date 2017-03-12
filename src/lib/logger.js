@@ -58,7 +58,7 @@ module.exports = Module => {
 
   // wrapper around debug so we can intercept the args.
   let func = (...args) => {
-    return debugInstance.apply(debugInstance, args);
+    // return debugInstance.apply(debugInstance, args);
   }
 
   return func

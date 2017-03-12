@@ -23,7 +23,6 @@ const communication  = new Communication();
     await msg.reply({
       hello: 'world'
     })
-    msg.ack();
   });
 })()
 
@@ -60,15 +59,9 @@ let router = (req, res) => {
   })
   .then(data => {
     debug('message', data.body)
-    if(!data.body.request) return debug('no request, panic')
-
+    if(!data.body.request) console.warn('Message didn\'t have request integreity checking abilities.')
     let requestId = data.body.request.id;
-    let potentialRequest = req.app.requests[requestId]
-
-    if(!potentialRequest) {
-      debug('req.app.requests =', req.app.requests)
-      return debug(`invalid request, '${requestId}' panic`)
-    }
+    if(!requestId === req.id) console.warn('Recieved request not for us...')
 
     return res.send({
       metadata: {
@@ -88,7 +81,8 @@ let router = (req, res) => {
       [service]: data.body.data || null
     })
   })
-  .catch(() => {
+  .catch(err => {
+    console.log('error', err)
     debug('error', id, `couldn\'t reach '${service}' in time.`)
     return res.error('Failed to retrieve response in allocated time.', 200, 503)
   })

@@ -26,22 +26,9 @@ if(app.requests) throw 'app.requests isn\'t empty'
 app.requests = {};
 
 app.use((req, res, next) => {
-
-  /**
-   * Remove a request.
-   *
-   * @param {String} id - id to invalidate.
-   * @returns {undefined} nothing.
-   **/
-  const revokeRequestId = id => {
-    debug('revokeRequestId', id);
-    req.app.requests[id] = null;
-  }
-
   // Generate Request ID.
-  const id = uuid.v4()+':'+uuid.v4();
+  const id = uuid.v4();
   req.id = id;
-  req.app.requests[id] = res;
 
   /**
    * Return a standard error.
@@ -52,7 +39,7 @@ app.use((req, res, next) => {
    * @returns {Null} null
    **/
   res.error = (desc, code, status = 501) => {
-    revokeRequestId(id)
+    console.log('error', desc, code, status)
     return res.status(status).send({
       error: {
         message: desc,
@@ -68,7 +55,6 @@ app.use((req, res, next) => {
    * @returns {Null} null
    **/
   res.success = data => {
-    revokeRequestId(id)
     return res.send({
       metadata: {
         server_time: Date.now()
@@ -84,7 +70,6 @@ app.use((req, res, next) => {
    * @returns {null} null
    **/
   res.paginate = data => {
-    revokeRequestId(id)
     return res.send({
       metadata: {
         pages: data.length,
