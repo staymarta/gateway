@@ -11,20 +11,10 @@ const Communication  = require('./communication.js');
 
 const communication  = new Communication();
 
-(async () => {
-  await communication.connect();
-
-  // Always declared wait before sending.
-  // Example microservice.
-  debug('service', 'waiting for messages');
-  communication.wait('v1.message.get', async msg => {
-    debug('service', 'sending reply');
-
-    await msg.reply({
-      hello: 'world'
-    })
-  });
-})()
+communication.connect()
+.then(() => {
+  debug('rabbitmq', 'connected')
+})
 
 /**
  * Service Router.
@@ -36,7 +26,8 @@ const communication  = new Communication();
  * @returns {*} next value.
  **/
 let router = (req, res) => {
-  let splitPath = req.path.split('/')
+  let commandString = null;
+  let splitPath = req.url.split('/')
 
   if(!splitPath[2]|| splitPath.length <= 2) return res.error('Invalid Path')
 
@@ -50,34 +41,51 @@ let router = (req, res) => {
 
   debug('request', id)
 
+  // Check if we have any input her.
+  if(splitPath.length >= 3) {
+    commandString = splitPath[3];
+  }
+
+
   // Send the message and await the response.
   communication.sendAndWait(rmqString, {
       request: {
         id: id,
-        created: Date.now()
+        created: Date.now(),
+        string: commandString
       }
   })
   .then(data => {
+    const metadata = {
+      info: {
+        method: method,
+        version: version,
+        service: service
+      },
+      rabbitmq: {
+        type: rmqString
+      },
+      gateway: {
+        id: communication.service_id,
+        time: Date.now()
+      }
+    }, serviceRes = data.body.data;
+
     debug('message', data.body)
     if(!data.body.request) console.warn('Message didn\'t have request integreity checking abilities.')
     let requestId = data.body.request.id;
     if(!requestId === req.id) console.warn('Recieved request not for us...')
 
+    metadata.gateway.request_id = data.body.request.id;
+    if(data.body.reply) metadata[service] = data.body.reply;
+
+    // Handle errors.
+    if(serviceRes.error) {
+      return res.error(serviceRes.error, serviceRes.code)
+    }
+
     return res.send({
-      metadata: {
-        info: {
-          method: method,
-          version: version,
-          service: service
-        },
-        rabbitmq: {
-          type: rmqString
-        },
-        gateway: {
-          id: communication.service_id,
-          time: Date.now()
-        }
-      },
+      metadata: metadata,
       [service]: data.body.data || null
     })
   })

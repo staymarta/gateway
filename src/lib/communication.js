@@ -7,7 +7,6 @@
  **/
 
 const debug  = require('./logger.js')('staymarta:communication')
-const uuid   = require('uuid');
 const os     = require('os');
 
 /**
@@ -19,14 +18,20 @@ class ServiceCommunication {
     this.rabbitmq = rabbitmq
   }
 
-  async connect() {
+  /**
+   * Connect to rabbitmq
+   *
+   * @param {String} [servicename] - If in service mode, what do we identify as?
+   * @returns {Promise} std node promise
+   **/
+  async connect(servicename) {
     this.exchange = 'v1';
     this.timeout  = 5000;
     this.service_id = os.hostname() // HACK: Think about using container ID?
 
     let unique_queue = `${this.exchange}.api--${this.service_id}`
     this.unique_queue = unique_queue;
-    this.service_queue = 'v1.message';
+    this.service_queue = `v1.${servicename}`;
 
     await this.rabbot.configure({
       connection: {
@@ -71,7 +76,7 @@ class ServiceCommunication {
         {
           exchange: this.exchange,
           target: this.service_queue,
-          keys: 'v1.message'
+          keys: this.service_queue
         },
         {
           exchange: `${this.exchange}.api`,
@@ -112,6 +117,19 @@ class ServiceCommunication {
       let request = msg.body.request;
       if(!request) return debug('notice', 'failed to access the request object. Is this a response?')
 
+
+      /**
+       * Returns an error.
+       *
+       * @param {String} [reason="GENERIC_ERROR"] - reason for the error
+       * @param {Number} [code=1] - code for this error
+       **/
+      msg.error = (reason, code) => {
+        msg.reply({
+          error: reason,
+          code: code
+        })
+      }
 
       /**
        * Message reply override to include custom type and autorequest insertion
