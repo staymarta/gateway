@@ -7,13 +7,27 @@
 
 'use strict';
 
-const express = require('express');
-const bodyp   = require('body-parser');
-const uuid    = require('uuid');
+const express = require('express')
+const bodyp   = require('body-parser')
+const uuid    = require('uuid')
 const debug   = require('./lib/logger.js')('staymarta:bootstrap')
-const router  = require('./lib/router.js');
+const router  = require('./lib/router.js')
+const os = require('os')
 
 debug('init', 'modules loaded')
+
+const ifaces = os.networkInterfaces();
+
+Object.keys(ifaces).forEach(ifname => {
+  ifaces[ifname].forEach(iface => {
+    if ('IPv4' !== iface.family || iface.internal !== false) {
+      // skip over internal (i.e. 127.0.0.1) and non-ipv4 addresses
+      return;
+    }
+
+    debug('net', ifname, iface.address);
+  });
+});
 
 let app = express();
 
@@ -38,7 +52,9 @@ app.use((req, res, next) => {
    * @param {Number} status - HTTP Status Code.
    * @returns {Null} null
    **/
-  res.error = (desc, code, status = 501) => {
+  res.error = (desc, code, status = 503) => {
+    if(code) status = code;
+    
     console.log('error', desc, code, status)
     return res.status(status).send({
       error: {
