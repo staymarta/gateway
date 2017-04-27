@@ -7,7 +7,6 @@
   "author": "Jared Allard <jaredallard@outlook.com>",
   "license": "MIT",
   "dependencies": {
-    "async": "^2.1.5",
     "babel-eslint": "^7.1.1",
     "body-parser": "^1.17.0",
     "debug": "^2.6.1",

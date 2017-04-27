@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 URL=http://172.18.0.$1
-ENDPOINT=/v1/message
+ENDPOINT=/v1/users/jared
 
 help() {
 cat <<EOF
