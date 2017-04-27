@@ -13,6 +13,7 @@
     "debug": "^2.6.1",
     "eslint": "^3.17.1",
     "express": "^4.15.2",
+    "libcommunication": "^1.0.2",
     "rabbot": "^1.0.8",
     "uuid": "^3.0.1"
   }
