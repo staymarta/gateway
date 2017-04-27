@@ -2,12 +2,12 @@
  * Simple Router.
  *
  * @author StayMarta
- * @license BSD (See git repo for exact varient.)
+ * @license BSD-3-Clause
  * @version 1.0
  **/
 
 const debug          = require('./logger.js')('staymarta:router')
-const Communication  = require('./communication.js');
+const Communication  = require('libcommunication');
 
 const communication  = new Communication();
 
