@@ -1,14 +1,14 @@
 FROM staymarta/service-base-node
 
 ENV DEBUG node-vault,staymarta*
-WORKDIR "/gateway"
+WORKDIR /gateway
 
 # Add nodemon
 RUN yarn global add nodemon
 
 # Install Dependencies
-ADD ./package.json /gateway
+COPY ./package.json /gateway
 RUN yarn
 
 # Copy files
-ADD ./ /gateway
+COPY ./ /gateway
