@@ -10,9 +10,12 @@ const debug          = require('./logger.js')('staymarta:router')
 const Communication  = require('libcommunication');
 const communication  = new Communication();
 
-communication.connect()
+communication.connect('gateway')
 .then(() => {
-  debug('rabbitmq', 'connected')
+  debug('libcommunication', 'connected')
+})
+.catch(() => {
+  debug('libcommunication', 'failed to connect')
 })
 
 /**
@@ -67,16 +70,9 @@ let router = (req, res) => {
 
   // Handle service data.
   .then(data => {
+    console.log(data.body)
     const metadata   =
           {
-            info: {
-              method: method,
-              version: version,
-              service: service
-            },
-            rabbitmq: {
-              type: rmqString
-            },
             gateway: {
               id: communication.service_id,
               time: Date.now()
@@ -86,6 +82,10 @@ let router = (req, res) => {
           serviceRes = body.data,
           reqMeta    = body.request,
           requestId  = reqMeta.id
+
+    // set scope
+    req = global.requests[requestId].req
+    res = global.requests[requestId].res
 
     debug('message', body)
 

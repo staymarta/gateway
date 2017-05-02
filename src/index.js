@@ -35,9 +35,7 @@ let app = express();
  * Built In API helpers.
  **/
 
-// Future update security.
-if(app.requests) throw 'app.requests isn\'t empty'
-app.requests = {};
+global.requests = {};
 
 app.use((req, res, next) => {
   // Generate Request ID.
@@ -54,7 +52,9 @@ app.use((req, res, next) => {
    **/
   res.error = (desc, code, status = 503) => {
     if(code) status = code;
-    
+
+    global.requests[id] = null;
+
     console.log('error', desc, code, status)
     return res.status(status).send({
       error: {
@@ -71,6 +71,8 @@ app.use((req, res, next) => {
    * @returns {Null} null
    **/
   res.success = data => {
+    global.requests[id] = null;
+
     return res.send({
       metadata: {
         server_time: Date.now()
@@ -94,6 +96,12 @@ app.use((req, res, next) => {
       },
       data: data
     })
+  };
+
+  // store this request in memory
+  global.requests[id] = {
+    res: res,
+    req: req
   };
 
   return next();
