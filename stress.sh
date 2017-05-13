@@ -17,7 +17,7 @@ if [[ -z "$1" ]]; then
   help
 fi
 
-loadtest -V c;1>/dev/null 2>/dev/null
+loadtest -V 1>/dev/null 2>/dev/null
 if [[ $? -ne 0 ]]; then
   echo "couldn't find loadtest, attempting to install"
   npm install -g loadtest || echo "E: Failed to install 'loadtest' $(exit 1)"

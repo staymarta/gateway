@@ -14,10 +14,9 @@ We refer to it as a *dumb* gateway.
 
 
 
-1.  `GET /v1/messages` -> `v1.messages.get`
-2.  `v1.messages.get` sent out into the exchange / queue (RabbitMQ)
-3.  Service does whatever with data replies with `v1.messages.get.response`
-4.  Gateway formats this response into whatever way client needs this data, and returns it. 
+1.  `GET /v1/messages` -> `v1.messages`
+2. GET `v1.messages`
+3. Wrap response in client friendly format
 
 
 
@@ -27,10 +26,9 @@ Formatting is just a matter of a format like this:
 
 ```js
 {
-	"success": true,
-  	"messages": {
-      /* etc */
-  	}
+  "messages": {
+    /* etc */
+  }
 }
 ```
 

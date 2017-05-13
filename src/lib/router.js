@@ -7,25 +7,20 @@
  **/
 
 const debug          = require('./logger.js')('staymarta:router')
-const Communication  = require('libcommunication');
-const communication  = new Communication();
+const request        = require('request-promise-native')
+const fs             = require('fs-promise')
+const path           = require('path')
+const yaml           = require('js-yaml')
 
-communication.connect('gateway')
-.then(() => {
-  debug('libcommunication', 'connected')
-})
-.catch(() => {
-  debug('libcommunication', 'failed to connect')
-})
+// attempt to load a services.yaml
+let serviceMap;
+const serviceConfig  = path.join(__dirname, '../services.yaml');
+if(fs.existsSync(serviceConfig)) {
+  debug('serviceConfig', 'loading config file ...')
 
-/**
- * Track service errors for the circuit breaker.
- * @return {Integer}        0, for compat until implemented.
- */
-const error = () => {
-  debug('error', 'reporting not implemented.')
-  return 0
+  serviceMap = yaml.safeLoad(fs.readFileSync(serviceConfig, 'utf8'))
 }
+
 
 /**
  * Service Router.
@@ -37,84 +32,65 @@ const error = () => {
  * @returns {*} next value.
  **/
 let router = (req, res) => {
-  let commandString;
-  const splitPath = req.url.split('/')
-  const version   = splitPath[1];
-  const service   = splitPath[2];
-  const method    = req.method.toLowerCase();
+  const smenvname     = serviceMap.environment;
+  const splitPath     = req.url.split('/')
+  const version       = splitPath[1]
+  const service       = splitPath[2]
+  const method        = req.method.toLowerCase()
+
+  // allow this to be re-assigned later.
+  let serviceUrl    = `${version}.${service}`
+
+  // check if we are mapping service urls to something.
+  if(smenvname !== 'real') {
+    const smenv = serviceMap.environments[smenvname];
+    const serviceMapped = smenv[serviceUrl];
+
+    // load a mapped service config.
+    if(serviceMapped) {
+      const newServiceUrl = `${serviceMapped.hostname}:${serviceMapped.port}`
+      debug('serviceMap', 'rewrite', `${serviceUrl} => ${newServiceUrl}`)
+
+      serviceUrl = newServiceUrl;
+    } else {
+      debug('serviceMap', 'we don\'t map', serviceUrl)
+      return res.error('Invalid Endpoint', 404)
+    }
+  }
 
   // Check if it's even a valid route.
   if(splitPath.length <= 2) {
     return res.error('Invalid Path')
   }
 
-  // Generate message string.
-  let rmqString = `${version}.${service}.${method}`;
-  let id        = req.id;
+  // Build the request URL, why can't we just shift(3)?
+  splitPath.shift()
+  splitPath.shift()
+  splitPath.shift()
+  
+  const requestPath = splitPath.join('/')
+  const requestUrl  = `http://${serviceUrl}/${requestPath}`
 
-  debug('request', id)
-
-  // Check if we have any input here.
-  if(splitPath.length >= 3) {
-    commandString = splitPath[3]
-  }
-
-  // Send the message and await the response.
-  communication.sendAndWait(rmqString, {
-      request: {
-        id: id,
-        created: Date.now(),
-        string: commandString
-      }
+  debug('request', `${method} ${requestUrl}`)
+  request({
+    method: method,
+    uri: requestUrl,
+    headers: {
+      'User-Agent': 'v1.gateway'
+    },
+    json: true
   })
-
-  // Handle service data.
   .then(data => {
-    console.log(data.body)
-    const metadata   =
-          {
-            gateway: {
-              id: communication.service_id,
-              time: Date.now()
-            }
-          },
-          body       = data.body,
-          serviceRes = body.data,
-          reqMeta    = body.request,
-          requestId  = reqMeta.id
-
-    // set scope
-    req = global.requests[requestId].req
-    res = global.requests[requestId].res
-
-    debug('message', body)
-
-    // Handle service reported errors.
-    if(serviceRes.error) {
-      error(service);
-      return res.error(serviceRes.error, serviceRes.code)
-    }
-
-    // modify metadata to include request id.
-    metadata.gateway.request_id = requestId
-
-    // if service responded, include that data.
-    if(body.reply) {
-      metadata[service] = body.reply
-    }
-
-    // send a response back...
-    return res.send({
-      metadata: metadata,
-      [service]: serviceRes || null
-    })
+    return res.success(data);
   })
+  .catch(err => {
+    // handle unreachable / dead? services.
+    if(err.name === 'RequestError') {
+      return res.error('Service unavailable', 503);
+    }
 
-  // Handle service timeout.
-  .catch(() => {
-    debug('error', id, `couldn\'t reach '${service}' in time.`)
-    error(service);
-    return res.error('Failed to retrieve response in allocated time.', 200, 503)
+    // TODO: Implement passing on other status codes.
+    return res.error('Service returned not OK response', 503)
   })
 }
 

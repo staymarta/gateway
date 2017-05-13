@@ -1,0 +1,21 @@
+version: 1
+
+
+# Specifiy your services!
+environments:
+  debug:
+    v1.users:
+      hostname: "users"
+      port: 80
+
+    v1.messages:
+      hostname: "messages"
+      post: 80
+
+# Which environment do we use?
+# environment coreleates with name in environments tag.
+#
+# Setting this to "real" will cause defaults
+#  i.e 'v1.user' -> hostname 'v1.user' port 80, this allows for fluid service
+# discovery, or for "no config" setup.
+environment: 'debug'
