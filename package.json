@@ -1,6 +1,6 @@
 {
   "name": "gateway",
-  "version": "1.0.0",
+  "version": "1.1",
   "description": "StayMarta API Gateway Service",
   "main": "./src/index.js",
   "repository": "http://github.com/staymarta/gateway",

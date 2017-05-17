@@ -67,7 +67,7 @@ let router = (req, res) => {
   splitPath.shift()
   splitPath.shift()
   splitPath.shift()
-  
+
   const requestPath = splitPath.join('/')
   const requestUrl  = `http://${serviceUrl}/${requestPath}`
 
@@ -78,6 +78,7 @@ let router = (req, res) => {
     headers: {
       'User-Agent': 'v1.gateway'
     },
+    body: req.body,
     json: true
   })
   .then(data => {

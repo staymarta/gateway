@@ -10,19 +10,15 @@ This API gateway transforms as request like: `GET /v1/messages` into a method of
 
 We refer to it as a *dumb* gateway.
 
+**WARNING**: This only handles JSON currently, support for all types of data will be included eventually.
+
 ### Transformation Process
-
-
 
 1.  `GET /v1/messages` -> `v1.messages`
 2. GET `v1.messages`
 3. Wrap response in client friendly format
 
-
-
 Formatting is just a matter of a format like this:
-
-
 
 ```js
 {
@@ -32,13 +28,9 @@ Formatting is just a matter of a format like this:
 }
 ```
 
-
-
 ## Managing Multi-Service data endpoints
 
 (… coming soon)
-
-
 
 ## License
 
