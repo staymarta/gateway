@@ -32,5 +32,6 @@ Type: `HTTP` or `HTTPS`
 Headers:
 
 ```js
-X-Success: true // did we succeed, assumes true
+X-Success: true       // did we succeed, assumes true
+X-Service-ID: addksla // service id (container ID)
 ```

@@ -10,6 +10,7 @@ const debug          = require('./logger.js')('staymarta:router')
 const request        = require('request-promise-native')
 const fs             = require('fs-promise')
 const path           = require('path')
+const os             = require('os')
 const yaml           = require('js-yaml')
 
 // attempt to load a services.yaml
@@ -39,7 +40,8 @@ let router = (req, res) => {
   const method        = req.method.toLowerCase()
 
   // allow this to be re-assigned later.
-  let serviceUrl    = `${version}.${service}`
+  let serviceUrl      = `${version}.${service}`
+  const oldServiceUrl = serviceUrl
 
   // check if we are mapping service urls to something.
   if(smenvname !== 'real') {
@@ -76,13 +78,24 @@ let router = (req, res) => {
     method: method,
     uri: requestUrl,
     headers: {
-      'User-Agent': 'v1.gateway'
+      'User-Agent': 'v1.gateway',
+      'X-Gateway-Endpoint': req.url,
+      'X-Gateway-ID': os.hostname(),
+      'X-Service': oldServiceUrl
     },
     body: req.body,
+    resolveWithFullResponse: true,
     json: true
   })
-  .then(data => {
-    return res.success(data);
+  .then(response => {
+    const data    = response.body
+    const headers = response.headers
+    const service = {
+      id: headers['x-service-id'],
+      name: oldServiceUrl
+    }
+
+    return res.success(data, service);
   })
   .catch(err => {
     // handle unreachable / dead? services.

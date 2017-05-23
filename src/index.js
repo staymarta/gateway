@@ -62,13 +62,15 @@ app.use((req, res, next) => {
   /**
    * Return a standard success response
    *
-   * @param {*} data - data to send.
+   * @param {*}      data           data to send.
+   * @param {Object} [service={}]   service metadata
    * @returns {Null} null
    **/
-  res.success = data => {
+  res.success = (data, service = {}) => {
     return res.send({
       metadata: {
-        server_time: Date.now()
+        server_time: Date.now(),
+        service: service
       },
       data: data
     })
