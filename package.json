@@ -6,18 +6,27 @@
   "repository": "http://github.com/staymarta/gateway",
   "author": "Jared Allard <jaredallard@outlook.com>",
   "license": "MIT",
+  "scripts": {
+    "start": "node ./src/index.js"
+  },
   "dependencies": {
+    "arangojs": "^5.6.1",
     "babel-eslint": "^7.1.1",
     "body-parser": "^1.17.0",
     "debug": "^2.6.1",
     "eslint": "^3.17.1",
     "express": "^4.15.2",
     "fs-promise": "^2.0.2",
+    "hawk": "^6.0.1",
     "js-yaml": "^3.8.3",
     "libcommunication": "^1.0.2",
+    "passport": "^0.3.2",
+    "passport-facebook": "^2.1.1",
+    "passport-google-oauth20": "^1.0.0",
     "rabbot": "^1.0.8",
     "request": "^2.81.0",
     "request-promise-native": "^1.0.3",
+    "scrypt": "^6.0.3",
     "uuid": "^3.0.1"
   }
 }

@@ -7,12 +7,14 @@
 
 'use strict';
 
-const express = require('express')
-const bodyp   = require('body-parser')
-const uuid    = require('uuid')
-const debug   = require('./lib/logger.js')('staymarta:bootstrap')
-const router  = require('./lib/router.js')
-const os = require('os')
+const express  = require('express')
+const bodyp    = require('body-parser')
+const debug    = require('./lib/logger.js')('staymarta:bootstrap')
+const router   = require('./lib/router.js')
+const auth     = require('./lib/auth.js')
+const os       = require('os')
+
+const normalize = require('./lib/normalize.js')
 
 debug('init', 'modules loaded')
 
@@ -29,76 +31,27 @@ Object.keys(ifaces).forEach(ifname => {
   });
 });
 
-let app = express();
+// Allow usage of "await"
+(async () => {
 
-/**
- * Built In API helpers.
- **/
-app.use((req, res, next) => {
-  // Generate Request ID.
-  const id = uuid.v4();
-  req.id = id;
+  let app = express();
 
   /**
-   * Return a standard error.
-   *
-   * @param {String} desc - description of the error.
-   * @param {Number} code - error code
-   * @param {Number} status - HTTP Status Code.
-   * @returns {Null} null
+   * Built In API helpers.
    **/
-  res.error = (desc, code, status = 503) => {
-    if(code) status = code;
+  app.use(normalize)
+  app.use(bodyp.json())
 
-    console.log('error', desc, code, status)
-    return res.status(status).send({
-      error: {
-        message: desc,
-        code: code
-      }
-    })
-  };
+  // setup auth
+  debug('init', 'setting up auth')
+  await auth(app)
+  debug('init', 'auth finished')
 
-  /**
-   * Return a standard success response
-   *
-   * @param {*}      data           data to send.
-   * @param {Object} [service={}]   service metadata
-   * @returns {Null} null
-   **/
-  res.success = (data, service = {}) => {
-    return res.send({
-      metadata: {
-        server_time: Date.now(),
-        service: service
-      },
-      data: data
-    })
-  }
+  // transactions, etc.
+  app.use(router)
 
-  /**
-   * Paginate data.
-   *
-   * @param {*} data - data to paginate / send.
-   * @returns {null} null
-   **/
-  res.paginate = data => {
-    return res.send({
-      metadata: {
-        pages: data.length,
-        per_page: 1,
-        length: data.length
-      },
-      data: data
-    })
-  };
+  app.listen(80, () => {
+    debug('running on port 80')
+  });
 
-  return next();
-})
-
-app.use(bodyp.json())
-app.use(router)
-
-app.listen(80, () => {
-  debug('running on port 80')
-});
+})()

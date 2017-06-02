@@ -1,0 +1,24 @@
+version: 1
+
+auth:
+  enabled: true
+  methods:
+    - google
+    - facebook
+  secrets:
+    facebook:
+      client_id:     "1780591645584899"
+      client_secret: "89d2796255b86c7ba3d3ca2b2ba5ab8e"
+      callback_url:  "http://dev.staymarta.com/auth/facebook/callback"
+      options:
+        scope:
+          -          "email"
+
+    google:
+      client_id:     "476564262767-j0mn9hu93m2dec5rhnrfdabgprkha636.apps.googleusercontent.com"
+      client_secret: "d9XsITnNtmtONLTX7yKacoba"
+      callback_url:  "http://dev.staymarta.com/auth/google/callback"
+      options:
+        scope:
+          -          "profile"
+          -          "email"
