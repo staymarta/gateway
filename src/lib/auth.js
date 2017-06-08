@@ -11,10 +11,12 @@ const debug            = require('debug')('staymarta:auth')
 const yaml             = require('js-yaml')
 const fs               = require('fs')
 const path             = require('path')
-const scrypt           = require('scrypt')
 
-const DB               = require('./db.js')
-const Password         = require('./password.js')
+const Database         = require('./db.js')
+
+// setup db
+let db              = new Database()
+db.connect('users')
 
 // ones we can configure.
 const authStrategies   = {
@@ -33,16 +35,11 @@ if(fs.existsSync(config)) {
 
 // Auth handler
 module.exports = async app => {
-
-  const password = new Password()
-  await password.init()
-
   if(!authConfig.enabled) return debug('auth', 'disabled in config')
 
   debug('auth', 'configured to use methods:', authConfig.methods)
 
   app.use(passport.initialize())
-  app.use(passport.session())
 
   // create a router for our authentication method.
   authConfig.methods.forEach(authMethod => {
@@ -65,21 +62,52 @@ module.exports = async app => {
         'name'
       ]
     },
-    (accessToken, refreshToken, profile, cb) => {
-      const name = profile.name
+    async (accessToken, refreshToken, profile, cb) => {
+      const name     = `${profile.name.givenName} ${profile.name.familyName}`
+      const id       = profile.id
+      const email    = profile.emails[0].value
+      const username = `${authMethod}-${profile.id}`
 
       debug('opt:at', accessToken)
       debug('opt:rt', refreshToken)
       debug('opt:prof', profile)
 
-      debug('userid', profile.id)
-      debug('username (generated)', `${authMethod}-${profile.id}`)
-      debug('name', `${name.givenName} ${name.familyName}`)
+      debug('userid', id)
+      debug('username (generated)', username)
+      debug('name', name)
 
-      // HACK Doesn't
+      // HACK Doesn't account for unverified emails & etc
       debug('email', profile.emails[0].value)
 
-      return cb({})
+      try {
+        await db.exists('users', 'id', id)
+
+        // only generate on user create step
+        const rand = await require('crypto-promise').randomBytes(64);
+        const key  = rand.toString('hex')
+
+        await db.create('users', {
+          id:       id,
+          key:      key,
+          email:    email,
+          username: username,
+          name:     name
+        }, false)
+      } catch(e) {
+        // TODO authenticate user stuff.
+        if(e.message === 'EXISTS') {
+          const user = await db.get('users', 'id', id)
+          debug('found-user', user)
+          return cb({
+            success: true,
+          })
+        }
+
+        debug('auth-error', e)
+        return cb('Failed to Authenticate')
+      }
+
+      return cb('Authenticated')
     }));
 
     // routes
