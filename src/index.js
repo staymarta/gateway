@@ -11,9 +11,11 @@ const express  = require('express')
 const bodyp    = require('body-parser')
 const debug    = require('./lib/logger.js')('staymarta:bootstrap')
 const router   = require('./lib/router.js')
+const passport = require('passport')
 const auth     = require('./lib/auth.js')
 const os       = require('os')
 
+const cors      = require('cors')
 const normalize = require('./lib/normalize.js')
 
 debug('init', 'modules loaded')
@@ -41,6 +43,19 @@ Object.keys(ifaces).forEach(ifname => {
    **/
   app.use(normalize)
   app.use(bodyp.json())
+  app.use(cors())
+
+  app.get('/v1/auth/test', passport.authenticate('api-auth', { session: false }), (req, res) => {
+    return res.send(`Welcome, ${req.user.name}!`)
+  })
+
+  // quick implementation
+  // HACK
+  app.get('/v1/users/me', passport.authenticate('api-auth', { session: false }), (req, res) => {
+    const user = req.user;
+    delete user.key
+    return res.success(user)
+  })
 
   // setup auth
   debug('init', 'setting up auth')
@@ -55,3 +70,8 @@ Object.keys(ifaces).forEach(ifname => {
   });
 
 })()
+
+// Don't just get a "oh fuck a promise failed" message.
+process.on('unhandledRejection', reason => {
+  console.log('Unhandled Promise Rejection', reason)
+});

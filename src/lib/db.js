@@ -10,7 +10,7 @@
 
 const arangojs = require('arangojs')
 const debug    = require('./logger.js')('staymarta:db')
-c
+
 /**
  * Hack to have required variables.
  * @return {undefined} throws an error.

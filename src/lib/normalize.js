@@ -32,7 +32,7 @@ module.exports = (req, res, next) => {
    * @param {Object} [service={}]   service metadata
    * @returns {Null} null
    **/
-  res.success = (data, service = {}) => {
+  res.success = (data, service = 'gateway') => {
     return res.send({
       metadata: {
         server_time: Date.now(),

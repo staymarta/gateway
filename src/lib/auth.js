@@ -9,6 +9,7 @@
 const passport         = require('passport')
 const debug            = require('debug')('staymarta:auth')
 const yaml             = require('js-yaml')
+const Hawk             = require('passport-hawk')
 const fs               = require('fs')
 const path             = require('path')
 
@@ -40,6 +41,31 @@ module.exports = async app => {
   debug('auth', 'configured to use methods:', authConfig.methods)
 
   app.use(passport.initialize())
+
+  // Inner API Authentication Method
+  passport.use('api-auth', new Hawk(async (id, done) => {
+    console.log(id)
+    try {
+      const user_cursor = await db.find('users', 'id', id)
+      const user = await user_cursor.next()
+
+      if(!user) return done('USER_NOT_EXIST')
+
+      // TODO remove delete.
+      delete user._id;
+      delete user._key;
+      delete user._rev;
+
+      // might be bad scope.
+      done(null, {
+        key: 		 user.key,
+        algorithm: 'sha256',
+        user:		 user
+      });
+    } catch(err) {
+      return done(err)
+    }
+  }));
 
   // create a router for our authentication method.
   authConfig.methods.forEach(authMethod => {
@@ -95,32 +121,57 @@ module.exports = async app => {
         }, false)
       } catch(e) {
         // TODO authenticate user stuff.
-        if(e.message === 'EXISTS') {
-          const user = await db.get('users', 'id', id)
-          debug('found-user', user)
-          return cb({
-            success: true,
-          })
+        if(e.message !== 'EXISTS') {
+          debug('auth-error', e)
+          return cb(false)
         }
-
-        debug('auth-error', e)
-        return cb('Failed to Authenticate')
       }
 
-      return cb('Authenticated')
+      // TODO: HACK
+      const user_cursor = await db.find('users', 'id', id)
+      const user = await user_cursor.next()
+
+      // TODO: remove delete.
+      delete user._id;
+      delete user._key;
+      delete user._rev;
+
+      return cb(false, user)
     }));
 
     // routes
-    app.get(`/auth/${authMethod}`,
-      passport.authenticate(authMethod, authMethodConfig.options));
+    const options = authMethodConfig.options;
+    app.get(`/auth/${authMethod}`, async (req, res, next) => {
+      // Here we generate a "state" for our custom applications.
+      //
+      // Technically meets the RFC....
+      const redirect_uri = req.query.redirect_uri || 'https://staymarta.com'
+      const crsf_buf     = await require('crypto-promise').randomBytes(12)
+      const crsf         = crsf_buf.toString('hex')
+
+      options.state = `${crsf}${redirect_uri}`;
+
+      return next();
+    }, passport.authenticate(authMethod, options));
 
     app.get(`/auth/${authMethod}/callback`,
       passport.authenticate(authMethod, {
-        failureRedirect: 'https://staymarta.com'
+        failureRedirect: 'https://staymarta.com',
+        session: false
       }
     ),
       (req, res) => {
-        return res.success('authenticated')
+        const redirect_uri = req.query.state.substring(24)
+        const crsf         = req.query.state.replace(redirect_uri, '')
+
+        // user information to return.
+        const key          = req.user.key;
+        const id           = req.user.id;
+
+        debug('crsf',     crsf)
+        debug('redirect', redirect_uri)
+
+        return res.redirect(`${redirect_uri}?key=${key}&id=${id}`)
       }
     );
 
