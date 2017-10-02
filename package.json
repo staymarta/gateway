@@ -7,7 +7,9 @@
   "author": "Jared Allard <jaredallard@outlook.com>",
   "license": "MIT",
   "scripts": {
-    "start": "node ./src/index.js"
+    "start": "node ./src/index.js",
+    "snyk-protect": "snyk protect",
+    "prepublish": "npm run snyk-protect"
   },
   "dependencies": {
     "arangojs": "^5.6.1",
@@ -29,6 +31,8 @@
     "rabbot": "^1.0.8",
     "request": "^2.81.0",
     "request-promise-native": "^1.0.3",
-    "uuid": "^3.0.1"
-  }
+    "uuid": "^3.0.1",
+    "snyk": "^1.41.1"
+  },
+  "snyk": true
 }
