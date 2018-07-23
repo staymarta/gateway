@@ -19,7 +19,7 @@
     "eslint": "^3.17.1",
     "express": "^4.15.2",
     "fs-promise": "^2.0.2",
-    "hawk": "^6.0.1",
+    "hawk": "^7.0.0",
     "js-yaml": "^3.8.3",
     "libcommunication": "^1.0.2",
     "passport": "^0.3.2",
